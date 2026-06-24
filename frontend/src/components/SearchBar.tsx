@@ -115,7 +115,7 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
         }
         const trimmed = searchQuery.trim();
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("spotify:")) {
-            if (isSpotifyUrl(trimmed)) {
+            if (isValidFetchUrl(trimmed)) {
                 onSearchModeChange(false);
                 onUrlChange(trimmed);
                 onFetchUrl(trimmed);
@@ -223,7 +223,7 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
             setIsLoadingMore(false);
         }
     };
-    const isSpotifyUrl = (text: string) => {
+    const isValidFetchUrl = (text: string) => {
         const trimmed = text.trim();
         if (!trimmed)
             return true;
@@ -232,14 +232,16 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
             return true;
         return (trimmed.includes("spotify.com") ||
             trimmed.includes("spotify.link") ||
-            trimmed.startsWith("spotify:"));
+            trimmed.startsWith("spotify:") ||
+            trimmed.includes("youtube.com") ||
+            trimmed.includes("youtu.be"));
     };
     const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
         const pastedText = e.clipboardData.getData("text");
         if (!pastedText)
             return;
         const trimmed = pastedText.trim();
-        if (isSpotifyUrl(trimmed)) {
+        if (isValidFetchUrl(trimmed)) {
             e.preventDefault();
             onSearchModeChange(false);
             onUrlChange(trimmed);
@@ -254,7 +256,7 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
         }
     };
     const handleFetchWithValidation = () => {
-        if (!isSpotifyUrl(url)) {
+        if (!isValidFetchUrl(url)) {
             setInvalidUrl(url);
             setShowInvalidUrlDialog(true);
             return;

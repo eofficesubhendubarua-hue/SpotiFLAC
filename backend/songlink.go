@@ -43,10 +43,11 @@ type TrackAvailability struct {
 }
 
 type songLinkScrapeResult struct {
-	ISRC      string
-	TidalURL  string
-	AmazonURL string
-	DeezerURL string
+	ISRC       string
+	TidalURL   string
+	AmazonURL  string
+	DeezerURL  string
+	SpotifyURL string
 }
 
 type songLinkNextData struct {
@@ -419,6 +420,10 @@ func (s *SongLinkClient) scrapeSongLinkPage(pageURL string, region string) (*son
 			case "deezer":
 				if result.DeezerURL == "" {
 					result.DeezerURL = rawURL
+				}
+			case "spotify":
+				if result.SpotifyURL == "" {
+					result.SpotifyURL = rawURL
 				}
 			}
 		}

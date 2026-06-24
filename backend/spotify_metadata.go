@@ -368,6 +368,10 @@ func GetFilteredSpotifyData(ctx context.Context, spotifyURL string, batch bool, 
 	if separator != "" {
 		client.Separator = separator
 	}
+	// Try to resolve non-Spotify URLs (like YouTube Music links) to Spotify URLs
+	if resolvedURL, err := ResolveToSpotifyURL(ctx, spotifyURL); err == nil && resolvedURL != "" {
+		spotifyURL = resolvedURL
+	}
 	return client.GetFilteredData(ctx, spotifyURL, batch, delay, callback)
 }
 
@@ -1794,4 +1798,107 @@ func GetPreviewURL(trackID string) (string, error) {
 	}
 
 	return match, nil
+}
+
+func ResolveToSpotifyURL(ctx context.Context, inputURL string) (string, error) {
+	trimmed := strings.TrimSpace(inputURL)
+	if !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+		return "", fmt.Errorf("not an HTTP/HTTPS URL")
+	}
+
+	// If it is already a Spotify URL, return it as is
+	if strings.Contains(trimmed, "spotify.com") || strings.Contains(trimmed, "spotify.link") {
+		return trimmed, nil
+	}
+
+	// 1. Try Songlink scrape
+	s := NewSongLinkClient()
+	data, err := s.scrapeSongLinkPage("https://song.link/"+trimmed, "")
+	if err == nil && data != nil && data.SpotifyURL != "" {
+		return data.SpotifyURL, nil
+	}
+
+	// 2. Fallback: Try YouTube oEmbed + Spotify Search if it's a YouTube URL
+	if strings.Contains(trimmed, "youtube.com") || strings.Contains(trimmed, "youtu.be") {
+		spotifyURL, err := resolveYouTubeViaOEmbedAndSearch(ctx, trimmed)
+		if err == nil && spotifyURL != "" {
+			return spotifyURL, nil
+		}
+	}
+
+	return "", fmt.Errorf("could not resolve platform URL to Spotify")
+}
+
+func resolveYouTubeViaOEmbedAndSearch(ctx context.Context, ytURL string) (string, error) {
+	oembedURL := fmt.Sprintf("https://www.youtube.com/oembed?url=%s&format=json", url.QueryEscape(ytURL))
+	
+	req, err := http.NewRequestWithContext(ctx, "GET", oembedURL, nil)
+	if err != nil {
+		return "", err
+	}
+	
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("oembed returned status %d", resp.StatusCode)
+	}
+	
+	var oembed struct {
+		Title      string `json:"title"`
+		AuthorName string `json:"author_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&oembed); err != nil {
+		return "", err
+	}
+	
+	query := cleanYouTubeTitle(oembed.Title, oembed.AuthorName)
+	if query == "" {
+		return "", fmt.Errorf("empty query after cleaning title")
+	}
+	
+	searchResp, err := SearchSpotify(ctx, query, 5)
+	if err != nil || searchResp == nil || len(searchResp.Tracks) == 0 {
+		return "", fmt.Errorf("no Spotify search results for query: %s", query)
+	}
+	
+	return searchResp.Tracks[0].ExternalURL, nil
+}
+
+func cleanYouTubeTitle(title string, author string) string {
+	title = strings.ToLower(title)
+	
+	// Remove common bracketed/parenthesized noise
+	noiseRegexes := []*regexp.Regexp{
+		regexp.MustCompile(`\[[^\]]*official[^\]]*\]`),
+		regexp.MustCompile(`\([^\)]*official[^\)]*\)`),
+		regexp.MustCompile(`\[[^\]]*video[^\]]*\]`),
+		regexp.MustCompile(`\([^\)]*video[^\)]*\)`),
+		regexp.MustCompile(`\[[^\]]*audio[^\]]*\]`),
+		regexp.MustCompile(`\([^\)]*audio[^\)]*\)`),
+		regexp.MustCompile(`\[[^\]]*music[^\]]*\]`),
+		regexp.MustCompile(`\([^\)]*music[^\)]*\)`),
+		regexp.MustCompile(`\[[^\]]*lyrics[^\]]*\]`),
+		regexp.MustCompile(`\([^\)]*lyrics[^\)]*\)`),
+		regexp.MustCompile(`\[[^\]]*hq[^\]]*\]`),
+		regexp.MustCompile(`\([^\)]*hq[^\)]*\)`),
+		regexp.MustCompile(`\[[^\]]*hd[^\]]*\]`),
+		regexp.MustCompile(`\([^\)]*hd[^\)]*\)`),
+		regexp.MustCompile(`\[[^\]]*mv[^\]]*\]`),
+		regexp.MustCompile(`\([^\)]*mv[^\)]*\)`),
+		regexp.MustCompile(`\bft\b.*`),
+		regexp.MustCompile(`\bfeat\b.*`),
+	}
+
+	for _, re := range noiseRegexes {
+		title = re.ReplaceAllString(title, " ")
+	}
+
+	title = regexp.MustCompile(`\s+`).ReplaceAllString(title, " ")
+	title = strings.TrimSpace(title)
+	return title
 }
