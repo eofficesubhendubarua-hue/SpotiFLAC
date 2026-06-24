@@ -1,8 +1,9 @@
-import { X, Minus, Maximize, SlidersHorizontal, Globe, Eye, EyeOff } from "lucide-react";
+import { X, Minus, Maximize, SlidersHorizontal, Globe, Eye, EyeOff, Check } from "lucide-react";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../../wailsjs/runtime/runtime";
 import { Menubar, MenubarContent, MenubarMenu, MenubarItem, MenubarTrigger, MenubarLabel, MenubarSeparator } from "@/components/ui/menubar";
 import { Slider } from "@/components/ui/slider";
 import { getSettings, updateSettings } from "@/lib/settings";
+import type { Settings } from "@/lib/settings";
 import { PREVIEW_VOLUME_CHANGED_EVENT } from "@/lib/preview";
 import { fetchCurrentIPInfo } from "@/lib/api";
 import type { CurrentIPInfo } from "@/types/api";
@@ -30,9 +31,17 @@ const SPOTIFY_BLOCKED_COUNTRY_CODES = new Set([
 interface SettingsUpdatedDetail {
     previewVolume?: number;
 }
+type DownloaderSource = Settings["downloader"];
+const SOURCE_OPTIONS: { value: DownloaderSource; label: string; color: string }[] = [
+    { value: "auto",   label: "Auto",          color: "text-muted-foreground" },
+    { value: "tidal",  label: "Tidal",         color: "text-blue-400" },
+    { value: "qobuz",  label: "Qobuz",         color: "text-violet-400" },
+    { value: "amazon", label: "Amazon Music",  color: "text-cyan-400" },
+];
 export function TitleBar() {
     const initialSettings = getSettings();
     const [previewVolume, setPreviewVolume] = useState(initialSettings.previewVolume ?? 100);
+    const [downloaderSource, setDownloaderSource] = useState<DownloaderSource>(initialSettings.downloader ?? "auto");
     const [currentIPInfo, setCurrentIPInfo] = useState<CurrentIPInfo | null>(null);
     const [isLoadingCurrentIPInfo, setIsLoadingCurrentIPInfo] = useState(false);
     const [currentIPInfoError, setCurrentIPInfoError] = useState("");
@@ -47,10 +56,18 @@ export function TitleBar() {
             if (updatedSettings && typeof updatedSettings.previewVolume === "number") {
                 setPreviewVolume(updatedSettings.previewVolume);
             }
+            if (updatedSettings && typeof (updatedSettings as any).downloader === "string") {
+                setDownloaderSource((updatedSettings as any).downloader as DownloaderSource);
+            }
         };
         window.addEventListener("settingsUpdated", handleSettingsUpdate);
         return () => window.removeEventListener("settingsUpdated", handleSettingsUpdate);
     }, []);
+    const handleSourceChange = async (source: DownloaderSource) => {
+        setDownloaderSource(source);
+        await updateSettings({ downloader: source });
+        window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { downloader: source } }));
+    };
     const loadCurrentIPInfo = async (options?: {
         silent?: boolean;
     }) => {
@@ -174,6 +191,31 @@ export function TitleBar() {
                         {!isLoadingCurrentIPInfo && !currentIPInfo && currentIPInfoError && (<div className="text-xs text-muted-foreground">
                             IP detection unavailable
                         </div>)}
+                    </div>
+                    <MenubarSeparator />
+                    <div className="px-2 py-1.5">
+                        <MenubarLabel className="p-0 mb-1.5">Download Source</MenubarLabel>
+                        <div className="grid grid-cols-2 gap-1">
+                            {SOURCE_OPTIONS.map((opt) => (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => handleSourceChange(opt.value)}
+                                    className={`flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
+                                        downloaderSource === opt.value
+                                            ? "bg-primary/15 ring-1 ring-primary/50"
+                                            : "hover:bg-muted"
+                                    }`}
+                                >
+                                    <span className={downloaderSource === opt.value ? "text-foreground" : "text-muted-foreground"}>
+                                        {opt.label}
+                                    </span>
+                                    {downloaderSource === opt.value && (
+                                        <Check className="w-3 h-3 text-primary shrink-0" />
+                                    )}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <MenubarSeparator />
                     <MenubarItem onClick={() => openExternal("https://afkarxyz.fyi")} className="gap-2">

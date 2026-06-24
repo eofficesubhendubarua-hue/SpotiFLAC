@@ -17,7 +17,9 @@ const FETCH_PLACEHOLDERS = [
     "https://open.spotify.com/track/...",
     "https://open.spotify.com/album/...",
     "https://open.spotify.com/playlist/...",
-    "https://open.spotify.com/artist/...",
+    "https://music.youtube.com/watch?v=...",
+    "https://music.apple.com/...",
+    "https://music.amazon.com/albums/...",
 ];
 const SEARCH_PLACEHOLDERS = [
     "Golden",
@@ -230,11 +232,19 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
         const isUrl = /^(https?:\/\/|www\.)/i.test(trimmed) || /^spotify:/i.test(trimmed);
         if (!isUrl)
             return true;
-        return (trimmed.includes("spotify.com") ||
+        return (
+            trimmed.includes("spotify.com") ||
             trimmed.includes("spotify.link") ||
             trimmed.startsWith("spotify:") ||
             trimmed.includes("youtube.com") ||
-            trimmed.includes("youtu.be"));
+            trimmed.includes("youtu.be") ||
+            trimmed.includes("music.apple.com") ||
+            trimmed.includes("apple.com/music") ||
+            trimmed.includes("music.amazon.com") ||
+            trimmed.includes("amazon.com/music") ||
+            trimmed.includes("deezer.com") ||
+            trimmed.includes("tidal.com")
+        );
     };
     const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
         const pastedText = e.clipboardData.getData("text");
@@ -585,13 +595,20 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
       <Dialog open={showInvalidUrlDialog} onOpenChange={setShowInvalidUrlDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Invalid URL</DialogTitle>
+            <DialogTitle>Unsupported URL</DialogTitle>
             <DialogDescription>
-              {invalidUrl.includes("youtube.com") || invalidUrl.includes("youtube") ? (
-                "YouTube Music is not supported. SpotiFLAC only supports fetching metadata via Spotify links, and downloads files from Tidal, Qobuz, or Amazon Music."
-              ) : (
-                "Only Spotify links are allowed. SpotiFLAC only supports fetching metadata via Spotify links, and downloads files from Tidal, Qobuz, or Amazon Music."
-              )}
+              {(() => {
+                const u = invalidUrl.toLowerCase();
+                if (u.includes("music.apple.com") || u.includes("apple.com/music"))
+                  return "Apple Music links are not directly supported for metadata lookup. Paste a Spotify link instead, or switch to Search mode and type the song/artist name.";
+                if (u.includes("amazon.com/music") || u.includes("music.amazon.com"))
+                  return "Amazon Music links are not directly supported for metadata lookup. Paste a Spotify link instead, or switch to Search mode and type the song/artist name.";
+                if (u.includes("youtube.com") || u.includes("youtu.be"))
+                  return "This YouTube URL format is not supported. Try pasting a music.youtube.com link, a YouTube video URL (youtube.com/watch?v=...), or a Spotify link.";
+                if (u.includes("tidal.com") || u.includes("deezer.com"))
+                  return "Tidal/Deezer links are not supported for metadata lookup. Paste a Spotify link instead, or switch to Search mode and type the song/artist name.";
+                return "Only Spotify and YouTube Music links are supported for direct fetch. Paste a valid Spotify or YouTube link, or switch to Search mode to search by name.";
+              })()}
             </DialogDescription>
           </DialogHeader>
 
