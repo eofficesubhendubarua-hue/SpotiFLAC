@@ -42,6 +42,10 @@ func buildTagMap(filePath string, metadata Metadata) map[string][]string {
 	isFLACLike := ext == ".flac" || ext == ".ogg"
 	isMP3 := ext == ".mp3"
 	separator := resolveMetadataSeparator(metadata.Separator)
+	joinSeparator := metadata.Separator
+	if joinSeparator == "" {
+		joinSeparator = ", "
+	}
 
 	addTag := func(key, value string) {
 		value = strings.TrimSpace(value)
@@ -65,14 +69,28 @@ func buildTagMap(filePath string, metadata Metadata) map[string][]string {
 
 	addTag(taglib.Title, metadata.Title)
 
-	addTagValues(taglib.Artist, SplitArtistCredits(metadata.Artist, separator))
+	artistCredits := SplitArtistCredits(metadata.Artist, separator)
+	if isFLACLike {
+		addTagValues(taglib.Artist, artistCredits)
+	} else {
+		if len(artistCredits) > 0 {
+			addTag(taglib.Artist, strings.Join(artistCredits, joinSeparator))
+		}
+	}
 	if _, ok := tags[taglib.Artist]; !ok {
 		addTag(taglib.Artist, metadata.Artist)
 	}
 
 	addTag(taglib.Album, metadata.Album)
 
-	addTagValues(taglib.AlbumArtist, SplitArtistCredits(metadata.AlbumArtist, separator))
+	albumArtistCredits := SplitArtistCredits(metadata.AlbumArtist, separator)
+	if isFLACLike {
+		addTagValues(taglib.AlbumArtist, albumArtistCredits)
+	} else {
+		if len(albumArtistCredits) > 0 {
+			addTag(taglib.AlbumArtist, strings.Join(albumArtistCredits, joinSeparator))
+		}
+	}
 	if _, ok := tags[taglib.AlbumArtist]; !ok {
 		addTag(taglib.AlbumArtist, metadata.AlbumArtist)
 	}
@@ -113,7 +131,14 @@ func buildTagMap(filePath string, metadata Metadata) map[string][]string {
 		addTag("PUBLISHER", metadata.Publisher)
 	}
 
-	addTagValues(taglib.Composer, SplitArtistCredits(metadata.Composer, separator))
+	composerCredits := SplitArtistCredits(metadata.Composer, separator)
+	if isFLACLike {
+		addTagValues(taglib.Composer, composerCredits)
+	} else {
+		if len(composerCredits) > 0 {
+			addTag(taglib.Composer, strings.Join(composerCredits, joinSeparator))
+		}
+	}
 	if _, ok := tags[taglib.Composer]; !ok {
 		addTag(taglib.Composer, metadata.Composer)
 	}
@@ -121,7 +146,14 @@ func buildTagMap(filePath string, metadata Metadata) map[string][]string {
 	addTag(taglib.ISRC, metadata.ISRC)
 	addTag(preferredUPCTagKey, metadata.UPC)
 
-	addTagValues(taglib.Genre, SplitMetadataValues(metadata.Genre, separator))
+	genreValues := SplitMetadataValues(metadata.Genre, separator)
+	if isFLACLike {
+		addTagValues(taglib.Genre, genreValues)
+	} else {
+		if len(genreValues) > 0 {
+			addTag(taglib.Genre, strings.Join(genreValues, joinSeparator))
+		}
+	}
 	if _, ok := tags[taglib.Genre]; !ok {
 		addTag(taglib.Genre, metadata.Genre)
 	}
