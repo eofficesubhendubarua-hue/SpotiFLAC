@@ -113,7 +113,20 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
         if (!searchMode || !searchQuery.trim()) {
             return;
         }
-        if (searchQuery.trim() === lastSearchedQuery) {
+        const trimmed = searchQuery.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("spotify:")) {
+            if (isSpotifyUrl(trimmed)) {
+                onSearchModeChange(false);
+                onUrlChange(trimmed);
+                onFetchUrl(trimmed);
+            } else {
+                setInvalidUrl(trimmed);
+                setShowInvalidUrlDialog(true);
+                setSearchQuery("");
+            }
+            return;
+        }
+        if (trimmed === lastSearchedQuery) {
             return;
         }
         if (searchTimeoutRef.current) {
@@ -222,13 +235,22 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
             trimmed.startsWith("spotify:"));
     };
     const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-        if (searchMode)
-            return;
         const pastedText = e.clipboardData.getData("text");
-        if (pastedText && !isSpotifyUrl(pastedText)) {
+        if (!pastedText)
+            return;
+        const trimmed = pastedText.trim();
+        if (isSpotifyUrl(trimmed)) {
             e.preventDefault();
-            setInvalidUrl(pastedText);
+            onSearchModeChange(false);
+            onUrlChange(trimmed);
+            onFetchUrl(trimmed);
+        } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("spotify:")) {
+            e.preventDefault();
+            setInvalidUrl(trimmed);
             setShowInvalidUrlDialog(true);
+            if (searchMode) {
+                setSearchQuery("");
+            }
         }
     };
     const handleFetchWithValidation = () => {
@@ -378,7 +400,7 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
                   <XCircle className="h-4 w-4"/>
                 </button>)}
             </>) : (<>
-              <InputWithContext id="spotify-search" placeholder={placeholderText} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pr-8"/>
+              <InputWithContext id="spotify-search" placeholder={placeholderText} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onPaste={handlePaste} className="pr-8"/>
               {searchQuery && (<button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" onClick={() => {
                     setSearchQuery("");
                     setSearchResults(null);
@@ -563,7 +585,11 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
           <DialogHeader>
             <DialogTitle>Invalid URL</DialogTitle>
             <DialogDescription>
-              Only Spotify links are allowed in Fetch mode.
+              {invalidUrl.includes("youtube.com") || invalidUrl.includes("youtube") ? (
+                "YouTube Music is not supported. SpotiFLAC only supports fetching metadata via Spotify links, and downloads files from Tidal, Qobuz, or Amazon Music."
+              ) : (
+                "Only Spotify links are allowed. SpotiFLAC only supports fetching metadata via Spotify links, and downloads files from Tidal, Qobuz, or Amazon Music."
+              )}
             </DialogDescription>
           </DialogHeader>
 
