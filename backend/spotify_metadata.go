@@ -1811,22 +1811,74 @@ func ResolveToSpotifyURL(ctx context.Context, inputURL string) (string, error) {
 		return trimmed, nil
 	}
 
+	// Normalize YouTube URL if it is a YouTube or YouTube Music URL
+	normalizedURL := trimmed
+	if strings.Contains(trimmed, "youtube.com") || strings.Contains(trimmed, "youtu.be") {
+		normalizedURL = NormalizeYouTubeURL(trimmed)
+	}
+
 	// 1. Try Songlink scrape
 	s := NewSongLinkClient()
-	data, err := s.scrapeSongLinkPage("https://song.link/"+trimmed, "")
+	data, err := s.scrapeSongLinkPage("https://song.link/"+normalizedURL, "")
 	if err == nil && data != nil && data.SpotifyURL != "" {
 		return data.SpotifyURL, nil
 	}
 
 	// 2. Fallback: Try YouTube oEmbed + Spotify Search if it's a YouTube URL
-	if strings.Contains(trimmed, "youtube.com") || strings.Contains(trimmed, "youtu.be") {
-		spotifyURL, err := resolveYouTubeViaOEmbedAndSearch(ctx, trimmed)
+	if strings.Contains(normalizedURL, "youtube.com") || strings.Contains(normalizedURL, "youtu.be") {
+		spotifyURL, err := resolveYouTubeViaOEmbedAndSearch(ctx, normalizedURL)
 		if err == nil && spotifyURL != "" {
 			return spotifyURL, nil
 		}
 	}
 
 	return "", fmt.Errorf("could not resolve platform URL to Spotify")
+}
+
+func NormalizeYouTubeURL(inputURL string) string {
+	u, err := url.Parse(strings.TrimSpace(inputURL))
+	if err != nil {
+		return inputURL
+	}
+
+	host := strings.ToLower(u.Host)
+	if host == "youtu.be" {
+		videoID := strings.TrimPrefix(u.Path, "/")
+		if videoID != "" {
+			return "https://www.youtube.com/watch?v=" + videoID
+		}
+		return inputURL
+	}
+
+	if strings.Contains(host, "youtube.com") {
+		// Shorts
+		if strings.HasPrefix(u.Path, "/shorts/") {
+			videoID := strings.TrimPrefix(u.Path, "/shorts/")
+			if videoID != "" {
+				return "https://www.youtube.com/watch?v=" + videoID
+			}
+		}
+
+		// Watch URL
+		if u.Path == "/watch" {
+			q := u.Query()
+			videoID := q.Get("v")
+			if videoID != "" {
+				return "https://www.youtube.com/watch?v=" + videoID
+			}
+		}
+
+		// Playlist URL
+		if u.Path == "/playlist" {
+			q := u.Query()
+			playlistID := q.Get("list")
+			if playlistID != "" {
+				return "https://www.youtube.com/playlist?list=" + playlistID
+			}
+		}
+	}
+
+	return inputURL
 }
 
 func resolveYouTubeViaOEmbedAndSearch(ctx context.Context, ytURL string) (string, error) {
